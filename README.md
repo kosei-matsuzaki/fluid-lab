@@ -48,13 +48,25 @@
 ### 開発時の検証
 `node --check` はGLSLを検出できない。シェーダ変更時はヘッドレスChromium(Playwrightキャッシュの `chrome --headless=new --enable-unsafe-swiftshader`)で全モード生成+数フレーム実行のスモークテストを通すこと(GLSL予約語 `patch` で全滅した事故あり)。
 
-## ディレクトリ
+## ディレクトリ / ビルド
+
+シミュレーションの実体はJavaScript(+文字列埋め込みのGLSL)。Artifactの制約(厳格CSP・外部ファイル禁止)のため配布物は単一HTMLで、読めるソースは `src/` に分割してある。編集は `src/` で行い、`node build.js` で `fluid-lab.html` を組み立てる(単純なスプライスなので出力は決定的)。
 
 ```
-fluid-lab.html   本体(全モード統合版)
-legacy/          統合前の単体バージョン(開発履歴)
-  ink-flow.html      インク2D 初期版
-  ink-flow-3d.html   インク3D(のちに廃止)
-  water-box.html     水2D 初期版
-  water-box-3d.html  水3D 初期版
+build.js                  src/ → fluid-lab.html を組み立て(依存なし)
+fluid-lab.html            ビルド成果物(公開する単一ファイル)
+src/
+  template.html           HTML骨格(タイトル・マークアップ・挿入位置)
+  style.css               UIスタイル+Chakra Petchフォント(data URI)
+  00-shared.js            IIFE開始・GLヘルパー(glProgram等)・色変換
+  10-ink2d.js             インク: 2D Stable Fluids(GPU、渦度強化)
+  20-water2d.js           水2D: FLIP/PICクラス+メタボール水面
+  30-water3d-earth.js     ★根幹。水3D+地球の共通ファクトリ:
+                            FlipFluid3(3D FLIP)、SSFRパイプライン、
+                            地形生成(GPUノイズ+川彫り)、球面浅水方程式
+                            (GPU/CPU両実装)、潮汐・天体、レイマーチ描画
+  90-app.js               モード登録・サイドバーUI・入力(IIFE終了)
+legacy/                   統合前の単体バージョン(開発履歴)
 ```
+
+注意: `00-shared.js` の先頭と `90-app.js` の末尾がIIFEの開き/閉じを持つ(全ファイルは順結合されて1つのスクリプトになる)。

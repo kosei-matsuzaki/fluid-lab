@@ -1,0 +1,44 @@
+<title>Fluid Lab</title>
+<style>
+/*__STYLE__*/
+</style>
+
+<div id="stage"></div>
+
+<div class="hint" id="hint"></div>
+
+<aside class="sidebar" id="sidebar" aria-label="操作サイドバー">
+  <div class="rail">
+    <div class="rail-logo" aria-hidden="true"></div>
+    <div class="rail-modes" id="modeList" role="group" aria-label="モード切り替え"></div>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn" id="pauseBtn" aria-label="一時停止 / 再開"></button>
+    <button class="rail-btn" id="collapseBtn" aria-label="パネル開閉" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg></button>
+  </div>
+  <div class="panel">
+    <div class="p-head">
+      <div class="p-eyebrow">FLUID LAB</div>
+      <div class="p-mode" id="modeName"></div>
+      <div class="p-desc" id="modeDesc"></div>
+    </div>
+    <div class="p-body">
+      <div class="sb-section">
+        <div class="sec-label">ACTIONS</div>
+        <div class="action-list" id="actionSlot"></div>
+      </div>
+      <div class="sb-section">
+        <div class="sec-label">PARAMETERS</div>
+        <div class="ctl-list" id="ctlGrid"></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div class="err" id="errBox">
+  このブラウザは WebGL の必要機能に対応していないため、このモードを実行できません。<br>
+  デスクトップの Chrome / Edge / Firefox でお試しください。
+</div>
+
+<script>
+/*__SCRIPT__*/
+</script>
