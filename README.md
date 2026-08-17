@@ -57,6 +57,8 @@
 ```
 build.js                  src/ → fluid-lab.html を組み立て(依存なし)
 fluid-lab.html            ビルド成果物(公開する単一ファイル)
+index.html                GitHub Pages の紹介ページ(手書き・ビルド対象外)
+assets/                   紹介ページの画像(各モードの実写)とフォントCSS
 src/
   template.html           HTML骨格(タイトル・マークアップ・挿入位置)
   style.css               UIスタイル+Chakra Petchフォント(data URI)
@@ -75,6 +77,15 @@ legacy/                   統合前の単体バージョン(開発履歴)
 
 ## 公開
 
-GitHub Pages は `main` ブランチのルートを配信する。`index.html` は `fluid-lab.html` へのリダイレクトのみを行う入口(ビルド成果物を二重にコミットしないため)。`.nojekyll` でJekyll処理を無効化している。
+GitHub Pages は `main` ブランチのルートを配信する。`index.html` は作品紹介のランディングページ(OGP・各モードの実写つき)で、そこから `fluid-lab.html` に飛ばす。`.nojekyll` でJekyll処理を無効化している。
 
 `node build.js` して `fluid-lab.html` をコミット・pushすれば数十秒でPagesに反映される。
+
+### 紹介ページの画像
+`assets/*.webp` は実際の動作画面をヘッドレスChromiumで撮ったもの。撮り直す場合は puppeteer-core で各モードを起動し、UI(サイドバー・ヒント・浮動ボタン)を隠して数秒進めてからスクリーンショットを撮る。インクは `page.mouse` で実際にドラッグさせないと何も描かれない。
+
+### 断片HTMLであることの注意
+`fluid-lab.html` はArtifactのラッパー前提の断片(`<!DOCTYPE>`/`<html>`/`<head>`/`<body>` を持たない)。そのままPagesで配信すると:
+
+- `<meta charset>` と `<meta name="viewport">` は自前で持つ必要がある → `src/template.html` の先頭に置いてある。**消すとスマホでレイアウト幅980px・表示倍率0.4になり、キャンバスが6倍の画素数になって実質使えなくなる**
+- doctypeがないため互換モード(quirks)で描画される。現状のCSSは標準/互換どちらでも同じ見た目になることを確認済み。doctypeを足すとArtifact側でラッパーと二重になるため足していない

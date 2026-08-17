@@ -1,3 +1,10 @@
+<meta charset="utf-8">
+<!-- Without this, serving the file directly (GitHub Pages) gives phones a 980px
+     layout viewport scaled to ~0.4: unreadable UI, a 6x oversized canvas, and
+     window.innerWidth never drops under 640 so the panel never auto-collapses.
+     Both metas are honoured in body position, which is where the Artifact
+     wrapper puts them. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fluid Lab</title>
 <style>
   @font-face {

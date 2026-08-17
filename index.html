@@ -2,18 +2,318 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Fluid Lab</title>
-<!-- GitHub Pages の入口。実体は fluid-lab.html(ビルド成果物)。
-     ビルドごとに 220KB の複製をコミットしないよう、リダイレクトで受ける。 -->
-<meta http-equiv="refresh" content="0; url=fluid-lab.html">
-<link rel="canonical" href="fluid-lab.html">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluid Lab — ブラウザで動く4モード流体シミュレーション</title>
+<meta name="description" content="インク・水2D・水3D・地球。WebGL2で書いた4モードのインタラクティブ流体シミュレーション。依存ゼロの単一HTMLファイル。">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://kosei-matsuzaki.github.io/fluid-lab/">
+<meta property="og:title" content="Fluid Lab — ブラウザで動く4モード流体シミュレーション">
+<meta property="og:description" content="インク・水2D・水3D・地球。FLIP/PIC法と球面浅水方程式をWebGL2で実装した、依存ゼロの単一HTML。">
+<meta property="og:image" content="https://kosei-matsuzaki.github.io/fluid-lab/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://kosei-matsuzaki.github.io/fluid-lab/assets/og.jpg">
+
+<link rel="stylesheet" href="assets/chakra-petch.css">
 <style>
-  body { background:#0b0e14; color:#c9d1d9; font-family:system-ui,sans-serif;
-         display:grid; place-items:center; height:100vh; margin:0; }
-  a { color:#58a6ff; }
+  :root {
+    --ground: #05070C;
+    --raise: #0A0F18;
+    --line: rgba(184, 199, 218, 0.14);
+    --line-strong: rgba(184, 199, 218, 0.28);
+    --text: #C3D1E2;
+    --muted: #5C6E84;
+    --accent: #7FB4FF;
+    --font-ui: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", Meiryo, ui-sans-serif, sans-serif;
+    --font-disp: "Chakra Petch", ui-monospace, "Cascadia Code", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--font-ui);
+    line-height: 1.75;
+    letter-spacing: 0.01em;
+  }
+  a { color: var(--accent); }
+  img { max-width: 100%; display: block; }
+  .wrap { width: min(1080px, 100% - 2.5rem); margin-inline: auto; }
+
+  /* ---- hero ---- */
+  .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  /* faint bloom behind the globe so the column does not read as a pasted box */
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(46% 70% at 76% 46%, rgba(60,110,190,0.13), transparent 70%);
+  }
+  .hero-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    align-items: center;
+    gap: clamp(1.5rem, 5vw, 4rem);
+    padding: clamp(3.2rem, 8vw, 6.5rem) 0 clamp(3.2rem, 7vw, 5.5rem);
+  }
+  .hero-art img {
+    width: 100%; height: auto;
+    /* the source frame is near-black around the planet; fading the square's
+       edge lets the atmosphere glow bleed into the page background */
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 56%, transparent 78%);
+    mask-image: radial-gradient(circle at 50% 50%, #000 56%, transparent 78%);
+  }
+  .eyebrow {
+    font-family: var(--font-disp); font-weight: 700;
+    font-size: 0.8rem; letter-spacing: 0.34em; color: var(--accent);
+    text-transform: uppercase; margin: 0 0 1.1rem;
+  }
+  h1 {
+    font-size: clamp(2rem, 6.4vw, 3.6rem);
+    line-height: 1.24; margin: 0 0 1.2rem; font-weight: 700;
+    letter-spacing: 0.005em;
+  }
+  h1 .thin { color: var(--muted); font-weight: 500; }
+  .lead { max-width: 40rem; font-size: clamp(1rem, 2.3vw, 1.12rem); color: #A9BACE; margin: 0 0 2.2rem; }
+  .cta { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.55rem;
+    font-family: var(--font-disp); font-weight: 700; font-size: 0.95rem;
+    letter-spacing: 0.06em; text-decoration: none;
+    padding: 0.82rem 1.5rem; border-radius: 0.55rem;
+    border: 1px solid transparent; transition: transform .16s ease, background .16s ease, border-color .16s ease;
+  }
+  .btn-primary { background: var(--accent); color: #04121F; }
+  .btn-primary:hover { background: #9CC6FF; transform: translateY(-1px); }
+  .btn-ghost { border-color: var(--line-strong); color: var(--text); background: rgba(10,15,24,0.6); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+  .req { margin: 1.5rem 0 0; font-size: 0.83rem; color: var(--muted); }
+
+  /* ---- sections ---- */
+  section { padding: clamp(3.5rem, 8vw, 6rem) 0; }
+  section + section { border-top: 1px solid var(--line); }
+  .sec-label {
+    font-family: var(--font-disp); font-weight: 700;
+    font-size: 0.72rem; letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; margin: 0 0 0.9rem;
+  }
+  h2 { font-size: clamp(1.35rem, 3.4vw, 1.85rem); margin: 0 0 0.7rem; font-weight: 700; }
+  .sec-lead { color: var(--muted); max-width: 42rem; margin: 0 0 2.6rem; }
+
+  /* ---- mode cards ---- */
+  .modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.4rem; }
+  .card {
+    background: var(--raise); border: 1px solid var(--line);
+    border-radius: 0.7rem; overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: border-color .18s ease, transform .18s ease;
+  }
+  .card:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+  .card figure { margin: 0; aspect-ratio: 3 / 2; background: #000; }
+  .card figure img { width: 100%; height: 100%; object-fit: cover; }
+  .card-body { padding: 1.15rem 1.3rem 1.4rem; }
+  .card-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.35rem; }
+  .card-head h3 { font-size: 1.08rem; margin: 0; font-weight: 700; }
+  .key {
+    font-family: var(--font-disp); font-size: 0.72rem; font-weight: 700;
+    color: var(--muted); border: 1px solid var(--line);
+    border-radius: 0.25rem; padding: 0.05rem 0.42rem; letter-spacing: 0.08em;
+  }
+  .card p { margin: 0 0 0.85rem; font-size: 0.93rem; color: #A2B3C7; }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  .tags li {
+    font-family: var(--font-disp); font-size: 0.7rem; letter-spacing: 0.05em;
+    color: var(--muted); border: 1px solid var(--line);
+    border-radius: 0.25rem; padding: 0.12rem 0.5rem;
+  }
+
+  /* ---- tech notes ---- */
+  .notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2.2rem 3rem; }
+  .note h3 {
+    font-size: 0.98rem; margin: 0 0 0.6rem; font-weight: 700;
+    padding-bottom: 0.55rem; border-bottom: 1px solid var(--line);
+  }
+  .note ul { margin: 0; padding-left: 1.15rem; }
+  .note li { font-size: 0.9rem; color: #A2B3C7; margin-bottom: 0.5rem; }
+  code {
+    font-family: var(--font-disp); font-size: 0.85em;
+    background: rgba(127,180,255,0.09); color: #B7D2F7;
+    padding: 0.06em 0.34em; border-radius: 0.2rem;
+  }
+
+  /* ---- spec strip ---- */
+  .spec { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 0.7rem; overflow: hidden; }
+  .spec div { background: var(--raise); padding: 1.5rem 1.2rem; text-align: center; }
+  .spec dt { font-family: var(--font-disp); font-size: 0.7rem; letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase; }
+  .spec dd { font-family: var(--font-disp); font-weight: 700; font-size: clamp(1.3rem, 3.6vw, 1.9rem); margin: 0.35rem 0 0; color: var(--text); }
+  .spec dd .unit { font-size: 0.55em; color: var(--muted); margin-left: 0.15em; }
+
+  footer { border-top: 1px solid var(--line); padding: 2.6rem 0 3.4rem; color: var(--muted); font-size: 0.86rem; }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 1.4rem; margin-bottom: 1.1rem; }
+  .foot-links a { text-decoration: none; }
+  .foot-links a:hover { text-decoration: underline; }
+
+  @media (max-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr; padding-top: clamp(2rem, 6vw, 3rem); }
+    /* planet leads on narrow screens, copy follows */
+    .hero-art { order: -1; max-width: 20rem; margin-inline: auto; }
+    .notes { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .modes { grid-template-columns: 1fr; }
+    .spec { grid-template-columns: repeat(2, 1fr); }
+    .btn { flex: 1 1 auto; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
 </style>
 </head>
 <body>
-<p><a href="fluid-lab.html">Fluid Lab を開く</a></p>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+  <div class="hero-copy">
+    <p class="eyebrow">Fluid Lab</p>
+    <h1>流体シミュレーションを、<br><span class="thin">ブラウザだけで。</span></h1>
+    <p class="lead">
+      インクの渦、崩れる水、3Dの水槽、そして自転する惑星の水循環。
+      4種類の流体ソルバをWebGL2で実装して、ひとつの画面で切り替えられるようにしました。
+      ライブラリ依存ゼロ・単一HTMLファイル。インストールもビルドも不要で、リンクを開けば動きます。
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="fluid-lab.html">シミュレーションを起動</a>
+      <a class="btn btn-ghost" href="https://github.com/kosei-matsuzaki/fluid-lab">ソースコード (GitHub)</a>
+    </div>
+    <p class="req">要 WebGL2。フル品質には <code>EXT_color_buffer_float</code> が必要で、非対応環境ではCPUフォールバックで動作します。マウス操作前提のためデスクトップ推奨。</p>
+  </div>
+  <div class="hero-art">
+    <img src="assets/globe.webp" alt="" width="900" height="900" fetchpriority="high">
+  </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <p class="sec-label">Modes</p>
+    <h2>4つのモード</h2>
+    <p class="sec-lead">
+      画面はすべて実際の動作画面です。サイドバーのアイコン、または数字キーで切り替わります。
+      各モードのパラメータ（重力・粘性・解像度など）はスライダーで動かしながら変えられます。
+    </p>
+
+    <div class="modes">
+      <article class="card">
+        <figure><img src="assets/ink.webp" alt="インクモード: 青と緑の発光インクが渦を巻いて混ざり合う様子" loading="lazy" width="1200" height="800"></figure>
+        <div class="card-body">
+          <div class="card-head"><h3>インク</h3><span class="key">1</span></div>
+          <p>ドラッグした軌跡に沿って発光インクを流し込む2D流体。渦度強化を効かせているので、細い筆でも渦が渦を生む構造がはっきり出ます。</p>
+          <ul class="tags"><li>2D Stable Fluids</li><li>GPU</li><li>Vorticity Confinement</li></ul>
+        </div>
+      </article>
+
+      <article class="card">
+        <figure><img src="assets/water2d.webp" alt="水2Dモード: 崩れた水が右壁を駆け上がり、水滴を飛ばしながら砕ける波" loading="lazy" width="1200" height="800"></figure>
+        <div class="card-body">
+          <div class="card-head"><h3>水 2D</h3><span class="key">2</span></div>
+          <p>粒子と格子を行き来させるFLIP/PIC法の水槽。水面はメタボールで抜いているので、砕けた飛沫が粒として分離してから落ちてきます。</p>
+          <ul class="tags"><li>FLIP / PIC</li><li>MACグリッド</li><li>メタボール水面</li></ul>
+        </div>
+      </article>
+
+      <article class="card">
+        <figure><img src="assets/water3d.webp" alt="水3Dモード: 立方体の水槽の中で球体が水をかき混ぜ、壁面に泡が飛び散る様子" loading="lazy" width="1200" height="800"></figure>
+        <div class="card-body">
+          <div class="card-head"><h3>水 3D</h3><span class="key">3</span></div>
+          <p>3D FLIPの立体水槽。メッシュを作らずスクリーンスペースで水面を描くので、飛沫の一粒までそのまま屈折して見えます。球体でかき混ぜられます。</p>
+          <ul class="tags"><li>3D FLIP</li><li>SSFR</li><li>屈折 / Beer–Lambert</li></ul>
+        </div>
+      </article>
+
+      <article class="card">
+        <figure><img src="assets/earth.webp" alt="地球モード: 手続き生成された大陸と海を持つ惑星。雪をかぶった山脈と大気の光が見える" loading="lazy" width="1200" height="800"></figure>
+        <div class="card-body">
+          <div class="card-head"><h3>地球</h3><span class="key">4</span></div>
+          <p>球面の浅水方程式で全球の海を回す惑星モード。地形は毎回生成され、山に降った雨は谷を流れ下って川になります。月と太陽の潮汐、コリオリ力、季節つき。</p>
+          <ul class="tags"><li>球面浅水方程式</li><li>2048×1024格子</li><li>レイマーチ地形</li></ul>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="sec-label">Under the hood</p>
+    <h2>実装のポイント</h2>
+    <p class="sec-lead">
+      シミュレーションの本体はJavaScriptと、文字列に埋め込んだGLSLです。
+      重い部分はできるだけフラグメントシェーダに逃がしています。
+    </p>
+
+    <div class="notes">
+      <div class="note">
+        <h3>FLIP/PIC — 粒子と格子の往復</h3>
+        <ul>
+          <li>MACグリッド上で P2G / G2P 転送、圧力は過緩和1.9のGauss–Seidelで解く</li>
+          <li>速度差分のスナップショットは<strong>粒子→格子転送の後・圧力射影の前</strong>に取る。ここを間違えると毎フレーム自己増幅して発散する</li>
+          <li>静止時の安定化にドリフト補正のデッドバンド、境界は「壁に向かう流束だけ止める」方向性クランプ（全成分を固定すると壁に貼り付く）</li>
+        </ul>
+      </div>
+
+      <div class="note">
+        <h3>球面浅水方程式 — 惑星の海</h3>
+        <ul>
+          <li>緯度経度 2048×1024 の格子で状態 <code>(h, u, v)</code> をピンポン求積。地形テーブルと1セル1対1で対応</li>
+          <li>運動量に自由表面勾配・潮汐加速度（月＋太陽0.45倍）・コリオリ力、連続式は風上流束＋球面計量。極はミラー処理</li>
+          <li>重力波のCFL条件に合わせてサブステップ数を自動調整するので、重力スライダーを振っても壊れない</li>
+        </ul>
+      </div>
+
+      <div class="note">
+        <h3>地形生成 — 大陸と川</h3>
+        <ul>
+          <li>大陸は低周波fbmを分位点正規化して、陸地率が常に約48%になるよう保証</li>
+          <li>山脈はridgedノイズ。川は山の湧点から最急降下を追跡して谷を彫る（逐次処理なのでここだけCPU）</li>
+          <li>ノイズ合成は200万セルぶんGPUで回し、<code>readPixels</code>で読み戻してから川を刻む</li>
+        </ul>
+      </div>
+
+      <div class="note">
+        <h3>描画 — 水を水に見せる</h3>
+        <ul>
+          <li>球面インポスタで深度を書き、深度依存の分離ブラーで水面をなめらかにする</li>
+          <li>厚みパスを別に取り、屈折・フレネル・Beer–Lambert減衰で合成</li>
+          <li>惑星は地形をレイマーチ。太陽日と恒星日の比 1+1/365.25、朔望月27.32日、自転軸の傾きによる季節までシミュレーション時刻に同期</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <dl class="spec">
+      <div><dt>Modes</dt><dd>4</dd></div>
+      <div><dt>Dependencies</dt><dd>0</dd></div>
+      <div><dt>Single file</dt><dd>219<span class="unit">KB</span></dd></div>
+      <div><dt>Ocean grid</dt><dd>2M<span class="unit">cells</span></dd></div>
+    </dl>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-links">
+      <a href="fluid-lab.html">シミュレーションを起動</a>
+      <a href="https://github.com/kosei-matsuzaki/fluid-lab">GitHub</a>
+      <a href="https://github.com/kosei-matsuzaki/fluid-lab#readme">技術メモ (README)</a>
+    </div>
+    <p>Fluid Lab — WebGL2 / FLIP-PIC / Shallow Water Equations. Built by kosei-matsuzaki.</p>
+  </div>
+</footer>
+
 </body>
 </html>
