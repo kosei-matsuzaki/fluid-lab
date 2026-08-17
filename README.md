@@ -2,7 +2,9 @@
 
 ブラウザで動くインタラクティブ流体シミュレーション。単一HTMLファイル(依存なし・ビルド不要)で、4つのモードを切り替えられる。
 
-**公開版**: https://claude.ai/code/artifact/d3e7d264-c467-42cd-9a98-2e2d9c2df422
+**公開版**
+- GitHub Pages: https://kosei-matsuzaki.github.io/fluid-lab/
+- Artifact: https://claude.ai/code/artifact/d3e7d264-c467-42cd-9a98-2e2d9c2df422
 
 ## 実行方法
 
@@ -70,3 +72,9 @@ legacy/                   統合前の単体バージョン(開発履歴)
 ```
 
 注意: `00-shared.js` の先頭と `90-app.js` の末尾がIIFEの開き/閉じを持つ(全ファイルは順結合されて1つのスクリプトになる)。
+
+## 公開
+
+GitHub Pages は `main` ブランチのルートを配信する。`index.html` は `fluid-lab.html` へのリダイレクトのみを行う入口(ビルド成果物を二重にコミットしないため)。`.nojekyll` でJekyll処理を無効化している。
+
+`node build.js` して `fluid-lab.html` をコミット・pushすれば数十秒でPagesに反映される。
