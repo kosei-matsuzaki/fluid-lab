@@ -1,0 +1,1184 @@
+<title>Water Box 3D</title>
+<style>
+  :root {
+    --ground: #05070C;
+    --panel: rgba(13, 20, 32, 0.72);
+    --line: rgba(184, 199, 218, 0.14);
+    --text: #B8C7DA;
+    --muted: #5C6E84;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", Meiryo, ui-sans-serif, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #c.stir { cursor: crosshair; }
+  #c:active { cursor: grabbing; }
+
+  .lockup {
+    position: fixed; top: 20px; left: 24px;
+    pointer-events: none; user-select: none;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .lockup .name { font-size: 15px; font-weight: 700; letter-spacing: 0.14em; color: var(--text); }
+  .lockup .sub { font-size: 11px; letter-spacing: 0.08em; color: var(--muted); }
+
+  .hint {
+    position: fixed; left: 50%; top: 28%;
+    transform: translate(-50%, -50%);
+    font-size: 13px; letter-spacing: 0.25em; text-indent: 0.25em;
+    color: var(--muted);
+    pointer-events: none; user-select: none;
+    transition: opacity 1.2s ease;
+    text-align: center; line-height: 2.2;
+  }
+  .hint.gone { opacity: 0; }
+
+  .panel {
+    position: fixed; left: 50%; bottom: 20px;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 18px;
+    padding: 12px 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap; justify-content: center;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 5px; min-width: 104px; }
+  .ctl label {
+    font-size: 10px; letter-spacing: 0.12em; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  .ctl label output {
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 2px; border-radius: 1px;
+    background: rgba(184, 199, 218, 0.22);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--text); border: none; cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--text); border: none; cursor: pointer;
+  }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(184,199,218,.35); }
+  .btns { display: flex; gap: 8px; }
+  button {
+    font: inherit; font-size: 12px; letter-spacing: 0.06em;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  button:hover { background: rgba(184, 199, 218, 0.08); border-color: rgba(184, 199, 218, 0.3); }
+  button:focus-visible { outline: 2px solid rgba(184,199,218,.5); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: rgba(184, 199, 218, 0.14); border-color: rgba(184, 199, 218, 0.35); }
+
+  .err {
+    position: fixed; inset: 0; display: none;
+    place-items: center; text-align: center;
+    font-size: 14px; line-height: 1.9; color: var(--muted);
+    padding: 24px;
+  }
+</style>
+
+<canvas id="c"></canvas>
+
+<div class="lockup" aria-hidden="true">
+  <span class="name">WATER BOX 3D</span>
+  <span class="sub">重力つき液体シミュレーション(3D FLIP法)</span>
+</div>
+
+<div class="hint" id="hint">ドラッグで回転 ・ ホイール / ピンチで拡大<br>「かき混ぜ」モードでドラッグすると水を操れる(触れた水に色がつく)<br>矢印キーで水槽を傾け ・ R で水平に戻す</div>
+
+<div class="panel" role="group" aria-label="シミュレーション設定">
+  <div class="ctl">
+    <label for="grav">重力 <output id="gravV">9.8</output></label>
+    <input type="range" id="grav" min="0" max="25" step="0.1" value="9.8">
+  </div>
+  <div class="ctl">
+    <label for="flip">しぶき (FLIP率) <output id="flipV">0.85</output></label>
+    <input type="range" id="flip" min="0" max="1" step="0.01" value="0.85">
+  </div>
+  <div class="ctl">
+    <label for="amount">水の量 <output id="amountV">0.45</output></label>
+    <input type="range" id="amount" min="0.2" max="0.7" step="0.05" value="0.45">
+  </div>
+  <div class="ctl">
+    <label for="speed">再生速度 <output id="speedV">1.0</output></label>
+    <input type="range" id="speed" min="0.2" max="1.5" step="0.1" value="1.0">
+  </div>
+  <div class="btns">
+    <button id="stir" aria-pressed="false">かき混ぜ</button>
+    <button id="pour" aria-pressed="false">注水</button>
+    <button id="drain" aria-pressed="false">排水</button>
+    <button id="ball">ボール投入</button>
+    <button id="shake">シェイク</button>
+    <button id="reset">リセット</button>
+    <button id="pause" aria-pressed="false">一時停止</button>
+  </div>
+</div>
+
+<div class="err" id="err">
+  このブラウザは WebGL に対応していないため、シミュレーションを実行できません。<br>
+  デスクトップの Chrome / Edge / Firefox でお試しください。
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { alpha: false, depth: true, antialias: true })
+        || canvas.getContext('webgl',  { alpha: false, depth: true, antialias: true });
+if (!gl) { document.getElementById('err').style.display = 'grid'; return; }
+
+const FLUID = 0, AIR = 1, SOLID = 2;
+const BASE = [0.10, 0.40, 0.95];
+const FOAM = [0.85, 0.95, 1.00];
+
+// ---------- 3D FLIP fluid on a MAC grid ----------
+class FlipFluid3 {
+  constructor (width, height, depth, spacing, particleRadius, maxParticles) {
+    this.nX = Math.floor(width / spacing) + 1;
+    this.nY = Math.floor(height / spacing) + 1;
+    this.nZ = Math.floor(depth / spacing) + 1;
+    this.h = Math.max(width / this.nX, height / this.nY, depth / this.nZ);
+    this.inv = 1.0 / this.h;
+    this.sx = this.nY * this.nZ;   // index stride in x
+    this.sy = this.nZ;             // index stride in y  (z stride is 1)
+    const nc = this.numCells = this.nX * this.nY * this.nZ;
+
+    this.u = new Float32Array(nc);
+    this.v = new Float32Array(nc);
+    this.w = new Float32Array(nc);
+    this.du = new Float32Array(nc);
+    this.dv = new Float32Array(nc);
+    this.dw = new Float32Array(nc);
+    this.prevU = new Float32Array(nc);
+    this.prevV = new Float32Array(nc);
+    this.prevW = new Float32Array(nc);
+    this.s = new Float32Array(nc);
+    this.cellType = new Int32Array(nc);
+    this.particleDensity = new Float32Array(nc);
+    this.particleRestDensity = 0.0;
+
+    this.maxParticles = maxParticles;
+    this.particlePos = new Float32Array(3 * maxParticles);
+    this.particleVel = new Float32Array(3 * maxParticles);
+    this.particleColor = new Float32Array(3 * maxParticles);
+    this.particleRadius = particleRadius;
+
+    this.pInv = 1.0 / (2.2 * particleRadius);
+    this.pNumX = Math.floor(width * this.pInv) + 1;
+    this.pNumY = Math.floor(height * this.pInv) + 1;
+    this.pNumZ = Math.floor(depth * this.pInv) + 1;
+    this.pNumCells = this.pNumX * this.pNumY * this.pNumZ;
+    this.numCellParticles = new Int32Array(this.pNumCells);
+    this.firstCellParticle = new Int32Array(this.pNumCells + 1);
+    this.cellParticleIds = new Int32Array(maxParticles);
+    this.numParticles = 0;
+  }
+
+  integrateParticles (dt, gx, gy, gz) {
+    const pos = this.particlePos, vel = this.particleVel;
+    for (let i = 0; i < this.numParticles; i++) {
+      vel[3 * i] += dt * gx;
+      vel[3 * i + 1] += dt * gy;
+      vel[3 * i + 2] += dt * gz;
+      pos[3 * i] += vel[3 * i] * dt;
+      pos[3 * i + 1] += vel[3 * i + 1] * dt;
+      pos[3 * i + 2] += vel[3 * i + 2] * dt;
+    }
+  }
+
+  pushParticlesApart (numIters) {
+    const pos = this.particlePos;
+    const pNumY = this.pNumY, pNumZ = this.pNumZ;
+    const psx = pNumY * pNumZ, psy = pNumZ;
+
+    this.numCellParticles.fill(0);
+    for (let i = 0; i < this.numParticles; i++) {
+      const xi = Math.max(0, Math.min(this.pNumX - 1, Math.floor(pos[3 * i] * this.pInv)));
+      const yi = Math.max(0, Math.min(pNumY - 1, Math.floor(pos[3 * i + 1] * this.pInv)));
+      const zi = Math.max(0, Math.min(pNumZ - 1, Math.floor(pos[3 * i + 2] * this.pInv)));
+      this.numCellParticles[xi * psx + yi * psy + zi]++;
+    }
+    let first = 0;
+    for (let i = 0; i < this.pNumCells; i++) {
+      first += this.numCellParticles[i];
+      this.firstCellParticle[i] = first;
+    }
+    this.firstCellParticle[this.pNumCells] = first;
+    for (let i = 0; i < this.numParticles; i++) {
+      const xi = Math.max(0, Math.min(this.pNumX - 1, Math.floor(pos[3 * i] * this.pInv)));
+      const yi = Math.max(0, Math.min(pNumY - 1, Math.floor(pos[3 * i + 1] * this.pInv)));
+      const zi = Math.max(0, Math.min(pNumZ - 1, Math.floor(pos[3 * i + 2] * this.pInv)));
+      this.cellParticleIds[--this.firstCellParticle[xi * psx + yi * psy + zi]] = i;
+    }
+
+    const minDist = 2.0 * this.particleRadius;
+    const minDist2 = minDist * minDist;
+
+    for (let iter = 0; iter < numIters; iter++) {
+      for (let i = 0; i < this.numParticles; i++) {
+        const px = pos[3 * i], py = pos[3 * i + 1], pz = pos[3 * i + 2];
+        const pxi = Math.floor(px * this.pInv), pyi = Math.floor(py * this.pInv), pzi = Math.floor(pz * this.pInv);
+        const x0 = Math.max(pxi - 1, 0), y0 = Math.max(pyi - 1, 0), z0 = Math.max(pzi - 1, 0);
+        const x1 = Math.min(pxi + 1, this.pNumX - 1), y1 = Math.min(pyi + 1, pNumY - 1), z1 = Math.min(pzi + 1, pNumZ - 1);
+        for (let xi = x0; xi <= x1; xi++) {
+          for (let yi = y0; yi <= y1; yi++) {
+            for (let zi = z0; zi <= z1; zi++) {
+              const cell = xi * psx + yi * psy + zi;
+              const start = this.firstCellParticle[cell], end = this.firstCellParticle[cell + 1];
+              for (let k = start; k < end; k++) {
+                const id = this.cellParticleIds[k];
+                if (id === i) continue;
+                let dx = pos[3 * id] - px;
+                let dy = pos[3 * id + 1] - py;
+                let dz = pos[3 * id + 2] - pz;
+                const d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 > minDist2 || d2 === 0) continue;
+                const d = Math.sqrt(d2);
+                const sc = 0.5 * (minDist - d) / d;
+                dx *= sc; dy *= sc; dz *= sc;
+                pos[3 * i] -= dx; pos[3 * i + 1] -= dy; pos[3 * i + 2] -= dz;
+                pos[3 * id] += dx; pos[3 * id + 1] += dy; pos[3 * id + 2] += dz;
+                const col = this.particleColor;
+                for (let ch = 0; ch < 3; ch++) {
+                  const c0 = col[3 * i + ch], c1 = col[3 * id + ch];
+                  const mid = (c0 + c1) * 0.5;
+                  col[3 * i + ch] = c0 + (mid - c0) * 0.003;
+                  col[3 * id + ch] = c1 + (mid - c1) * 0.003;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  handleParticleCollisions (obstacle, balls) {
+    const h = this.h, r = this.particleRadius;
+    const minX = h + r, maxX = (this.nX - 1) * h - r;
+    const minY = h + r, maxY = (this.nY - 1) * h - r;
+    const minZ = h + r, maxZ = (this.nZ - 1) * h - r;
+    const useObs = obstacle.active;
+    const minObsDist = obstacle.radius + r;
+    const minObsDist2 = minObsDist * minObsDist;
+    const pos = this.particlePos, vel = this.particleVel, col = this.particleColor;
+    const nBalls = balls.length;
+
+    for (let i = 0; i < this.numParticles; i++) {
+      let x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
+
+      if (useObs) {
+        const dx = x - obstacle.x, dy = y - obstacle.y, dz = z - obstacle.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < minObsDist2) {
+          const d = Math.sqrt(d2) || 1e-6;
+          x = obstacle.x + dx / d * minObsDist;
+          y = obstacle.y + dy / d * minObsDist;
+          z = obstacle.z + dz / d * minObsDist;
+          vel[3 * i] = obstacle.vx;
+          vel[3 * i + 1] = obstacle.vy;
+          vel[3 * i + 2] = obstacle.vz;
+          if (obstacle.dye) {
+            col[3 * i] = obstacle.dye[0];
+            col[3 * i + 1] = obstacle.dye[1];
+            col[3 * i + 2] = obstacle.dye[2];
+          }
+        }
+      }
+
+      for (let b = 0; b < nBalls; b++) {
+        const ball = balls[b];
+        const md = ball.r + r;
+        const dx = x - ball.x, dy = y - ball.y, dz = z - ball.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < md * md) {
+          const d = Math.sqrt(d2) || 1e-6;
+          x = ball.x + dx / d * md;
+          y = ball.y + dy / d * md;
+          z = ball.z + dz / d * md;
+          vel[3 * i] = 0.5 * (vel[3 * i] + ball.vx);
+          vel[3 * i + 1] = 0.5 * (vel[3 * i + 1] + ball.vy);
+          vel[3 * i + 2] = 0.5 * (vel[3 * i + 2] + ball.vz);
+        }
+      }
+      if (x < minX) { x = minX; vel[3 * i] = 0; }
+      if (x > maxX) { x = maxX; vel[3 * i] = 0; }
+      if (y < minY) { y = minY; vel[3 * i + 1] = 0; }
+      if (y > maxY) { y = maxY; vel[3 * i + 1] = 0; }
+      if (z < minZ) { z = minZ; vel[3 * i + 2] = 0; }
+      if (z > maxZ) { z = maxZ; vel[3 * i + 2] = 0; }
+      pos[3 * i] = x; pos[3 * i + 1] = y; pos[3 * i + 2] = z;
+    }
+  }
+
+  updateParticleDensity () {
+    const h = this.h, inv = this.inv, h2 = 0.5 * h;
+    const sx = this.sx, sy = this.sy;
+    const d = this.particleDensity;
+    d.fill(0);
+    for (let i = 0; i < this.numParticles; i++) {
+      const x = Math.max(h, Math.min((this.nX - 1) * h, this.particlePos[3 * i]));
+      const y = Math.max(h, Math.min((this.nY - 1) * h, this.particlePos[3 * i + 1]));
+      const z = Math.max(h, Math.min((this.nZ - 1) * h, this.particlePos[3 * i + 2]));
+      const x0 = Math.min(Math.floor((x - h2) * inv), this.nX - 2), tx = (x - h2 - x0 * h) * inv;
+      const y0 = Math.min(Math.floor((y - h2) * inv), this.nY - 2), ty = (y - h2 - y0 * h) * inv;
+      const z0 = Math.min(Math.floor((z - h2) * inv), this.nZ - 2), tz = (z - h2 - z0 * h) * inv;
+      const base = x0 * sx + y0 * sy + z0;
+      const sx1 = 1 - tx, sy1 = 1 - ty, sz1 = 1 - tz;
+      d[base]                += sx1 * sy1 * sz1;
+      d[base + sx]           += tx * sy1 * sz1;
+      d[base + sy]           += sx1 * ty * sz1;
+      d[base + sx + sy]      += tx * ty * sz1;
+      d[base + 1]            += sx1 * sy1 * tz;
+      d[base + sx + 1]       += tx * sy1 * tz;
+      d[base + sy + 1]       += sx1 * ty * tz;
+      d[base + sx + sy + 1]  += tx * ty * tz;
+    }
+    if (this.particleRestDensity === 0.0) {
+      let sum = 0, count = 0;
+      for (let i = 0; i < this.numCells; i++) {
+        if (this.cellType[i] === FLUID) { sum += d[i]; count++; }
+      }
+      if (count > 0) this.particleRestDensity = sum / count;
+    }
+  }
+
+  transferVelocities (toGrid, flipRatio) {
+    const h = this.h, inv = this.inv, h2 = 0.5 * h;
+    const sx = this.sx, sy = this.sy;
+    const pos = this.particlePos, vel = this.particleVel;
+
+    if (toGrid) {
+      this.prevU.set(this.u); this.prevV.set(this.v); this.prevW.set(this.w);
+      this.du.fill(0); this.dv.fill(0); this.dw.fill(0);
+      this.u.fill(0); this.v.fill(0); this.w.fill(0);
+      for (let i = 0; i < this.numCells; i++) {
+        this.cellType[i] = this.s[i] === 0 ? SOLID : AIR;
+      }
+      for (let i = 0; i < this.numParticles; i++) {
+        const xi = Math.max(0, Math.min(this.nX - 1, Math.floor(pos[3 * i] * inv)));
+        const yi = Math.max(0, Math.min(this.nY - 1, Math.floor(pos[3 * i + 1] * inv)));
+        const zi = Math.max(0, Math.min(this.nZ - 1, Math.floor(pos[3 * i + 2] * inv)));
+        const cell = xi * sx + yi * sy + zi;
+        if (this.cellType[cell] === AIR) this.cellType[cell] = FLUID;
+      }
+    }
+
+    for (let component = 0; component < 3; component++) {
+      const dx = component === 0 ? 0 : h2;
+      const dy = component === 1 ? 0 : h2;
+      const dz = component === 2 ? 0 : h2;
+      const f = component === 0 ? this.u : component === 1 ? this.v : this.w;
+      const prevF = component === 0 ? this.prevU : component === 1 ? this.prevV : this.prevW;
+      const dArr = component === 0 ? this.du : component === 1 ? this.dv : this.dw;
+      const offset = component === 0 ? sx : component === 1 ? sy : 1;
+
+      for (let i = 0; i < this.numParticles; i++) {
+        const x = Math.max(h, Math.min((this.nX - 1) * h, pos[3 * i]));
+        const y = Math.max(h, Math.min((this.nY - 1) * h, pos[3 * i + 1]));
+        const z = Math.max(h, Math.min((this.nZ - 1) * h, pos[3 * i + 2]));
+        const x0 = Math.min(Math.floor((x - dx) * inv), this.nX - 2), tx = (x - dx - x0 * h) * inv;
+        const y0 = Math.min(Math.floor((y - dy) * inv), this.nY - 2), ty = (y - dy - y0 * h) * inv;
+        const z0 = Math.min(Math.floor((z - dz) * inv), this.nZ - 2), tz = (z - dz - z0 * h) * inv;
+        const rx = 1 - tx, ry = 1 - ty, rz = 1 - tz;
+        const base = x0 * sx + y0 * sy + z0;
+
+        const n0 = base,           w0 = rx * ry * rz;
+        const n1 = base + sx,      w1 = tx * ry * rz;
+        const n2 = base + sy,      w2 = rx * ty * rz;
+        const n3 = base + sx + sy, w3 = tx * ty * rz;
+        const n4 = base + 1,           w4 = rx * ry * tz;
+        const n5 = base + sx + 1,      w5 = tx * ry * tz;
+        const n6 = base + sy + 1,      w6 = rx * ty * tz;
+        const n7 = base + sx + sy + 1, w7 = tx * ty * tz;
+
+        if (toGrid) {
+          const pv = vel[3 * i + component];
+          f[n0] += pv * w0; dArr[n0] += w0;
+          f[n1] += pv * w1; dArr[n1] += w1;
+          f[n2] += pv * w2; dArr[n2] += w2;
+          f[n3] += pv * w3; dArr[n3] += w3;
+          f[n4] += pv * w4; dArr[n4] += w4;
+          f[n5] += pv * w5; dArr[n5] += w5;
+          f[n6] += pv * w6; dArr[n6] += w6;
+          f[n7] += pv * w7; dArr[n7] += w7;
+        } else {
+          const t = this.cellType;
+          const v0 = (t[n0] !== AIR || t[n0 - offset] !== AIR) ? 1 : 0;
+          const v1 = (t[n1] !== AIR || t[n1 - offset] !== AIR) ? 1 : 0;
+          const v2 = (t[n2] !== AIR || t[n2 - offset] !== AIR) ? 1 : 0;
+          const v3 = (t[n3] !== AIR || t[n3 - offset] !== AIR) ? 1 : 0;
+          const v4 = (t[n4] !== AIR || t[n4 - offset] !== AIR) ? 1 : 0;
+          const v5 = (t[n5] !== AIR || t[n5 - offset] !== AIR) ? 1 : 0;
+          const v6 = (t[n6] !== AIR || t[n6 - offset] !== AIR) ? 1 : 0;
+          const v7 = (t[n7] !== AIR || t[n7 - offset] !== AIR) ? 1 : 0;
+          const d = v0 * w0 + v1 * w1 + v2 * w2 + v3 * w3 + v4 * w4 + v5 * w5 + v6 * w6 + v7 * w7;
+          if (d > 0) {
+            const pv = vel[3 * i + component];
+            const picV = (v0 * w0 * f[n0] + v1 * w1 * f[n1] + v2 * w2 * f[n2] + v3 * w3 * f[n3]
+                        + v4 * w4 * f[n4] + v5 * w5 * f[n5] + v6 * w6 * f[n6] + v7 * w7 * f[n7]) / d;
+            const corr = (v0 * w0 * (f[n0] - prevF[n0]) + v1 * w1 * (f[n1] - prevF[n1])
+                        + v2 * w2 * (f[n2] - prevF[n2]) + v3 * w3 * (f[n3] - prevF[n3])
+                        + v4 * w4 * (f[n4] - prevF[n4]) + v5 * w5 * (f[n5] - prevF[n5])
+                        + v6 * w6 * (f[n6] - prevF[n6]) + v7 * w7 * (f[n7] - prevF[n7])) / d;
+            vel[3 * i + component] = (1 - flipRatio) * picV + flipRatio * (pv + corr);
+          }
+        }
+      }
+
+      if (toGrid) {
+        for (let i = 0; i < f.length; i++) {
+          if (dArr[i] > 0) f[i] /= dArr[i];
+        }
+      }
+    }
+
+    if (toGrid) {
+      // keep faces adjacent to solids at their previous (wall/paddle) velocity
+      const t = this.cellType;
+      for (let i = 0; i < this.nX; i++) {
+        for (let j = 0; j < this.nY; j++) {
+          for (let k = 0; k < this.nZ; k++) {
+            const idx = i * sx + j * sy + k;
+            const solid = t[idx] === SOLID;
+            if (solid || (i > 0 && t[idx - sx] === SOLID)) this.u[idx] = this.prevU[idx];
+            if (solid || (j > 0 && t[idx - sy] === SOLID)) this.v[idx] = this.prevV[idx];
+            if (solid || (k > 0 && t[idx - 1] === SOLID)) this.w[idx] = this.prevW[idx];
+          }
+        }
+      }
+    }
+  }
+
+  solveIncompressibility (numIters, overRelaxation) {
+    const sx = this.sx, sy = this.sy;
+    const t = this.cellType, s = this.s;
+    const u = this.u, v = this.v, w = this.w;
+
+    for (let iter = 0; iter < numIters; iter++) {
+      for (let i = 1; i < this.nX - 1; i++) {
+        for (let j = 1; j < this.nY - 1; j++) {
+          const rowBase = i * sx + j * sy;
+          for (let k = 1; k < this.nZ - 1; k++) {
+            const c = rowBase + k;
+            if (t[c] !== FLUID) continue;
+            const sx0 = s[c - sx], sx1 = s[c + sx];
+            const sy0 = s[c - sy], sy1 = s[c + sy];
+            const sz0 = s[c - 1], sz1 = s[c + 1];
+            const sSum = sx0 + sx1 + sy0 + sy1 + sz0 + sz1;
+            if (sSum === 0) continue;
+
+            let div = u[c + sx] - u[c] + v[c + sy] - v[c] + w[c + 1] - w[c];
+            if (this.particleRestDensity > 0) {
+              const compression = this.particleDensity[c] - this.particleRestDensity;
+              if (compression > 0) div -= compression;   // drift compensation keeps volume stable
+            }
+            const p = (-div / sSum) * overRelaxation;
+            u[c] -= sx0 * p; u[c + sx] += sx1 * p;
+            v[c] -= sy0 * p; v[c + sy] += sy1 * p;
+            w[c] -= sz0 * p; w[c + 1] += sz1 * p;
+          }
+        }
+      }
+    }
+  }
+
+  updateParticleColors () {
+    const inv = this.inv, sx = this.sx, sy = this.sy;
+    const rest = this.particleRestDensity;
+    const col = this.particleColor, pos = this.particlePos;
+    for (let i = 0; i < this.numParticles; i++) {
+      for (let ch = 0; ch < 3; ch++) {
+        const c = col[3 * i + ch];
+        col[3 * i + ch] = c + (BASE[ch] - c) * 0.012;   // slow fade so stirred-in dye lingers
+      }
+      if (rest > 0) {
+        const xi = Math.max(1, Math.min(this.nX - 2, Math.floor(pos[3 * i] * inv)));
+        const yi = Math.max(1, Math.min(this.nY - 2, Math.floor(pos[3 * i + 1] * inv)));
+        const zi = Math.max(1, Math.min(this.nZ - 2, Math.floor(pos[3 * i + 2] * inv)));
+        if (this.particleDensity[xi * sx + yi * sy + zi] / rest < 0.7) {
+          col[3 * i] = FOAM[0]; col[3 * i + 1] = FOAM[1]; col[3 * i + 2] = FOAM[2];
+        }
+      }
+    }
+  }
+
+  // trilinear read of the grid velocity at an arbitrary point (used for ball drag)
+  sampleVelocity (x, y, z) {
+    const h = this.h, inv = this.inv, h2 = 0.5 * h;
+    const sx = this.sx, sy = this.sy;
+    const out = [0, 0, 0];
+    x = Math.max(h, Math.min((this.nX - 1) * h, x));
+    y = Math.max(h, Math.min((this.nY - 1) * h, y));
+    z = Math.max(h, Math.min((this.nZ - 1) * h, z));
+    for (let component = 0; component < 3; component++) {
+      const dx = component === 0 ? 0 : h2;
+      const dy = component === 1 ? 0 : h2;
+      const dz = component === 2 ? 0 : h2;
+      const f = component === 0 ? this.u : component === 1 ? this.v : this.w;
+      const x0 = Math.min(Math.floor((x - dx) * inv), this.nX - 2), tx = (x - dx - x0 * h) * inv;
+      const y0 = Math.min(Math.floor((y - dy) * inv), this.nY - 2), ty = (y - dy - y0 * h) * inv;
+      const z0 = Math.min(Math.floor((z - dz) * inv), this.nZ - 2), tz = (z - dz - z0 * h) * inv;
+      const rx = 1 - tx, ry = 1 - ty, rz = 1 - tz;
+      const base = x0 * sx + y0 * sy + z0;
+      out[component] =
+        rx * ry * rz * f[base] + tx * ry * rz * f[base + sx]
+        + rx * ty * rz * f[base + sy] + tx * ty * rz * f[base + sx + sy]
+        + rx * ry * tz * f[base + 1] + tx * ry * tz * f[base + sx + 1]
+        + rx * ty * tz * f[base + sy + 1] + tx * ty * tz * f[base + sx + sy + 1];
+    }
+    return out;
+  }
+
+  // fraction of local rest density around a point, clamped to [0,1] (ball buoyancy)
+  submergedFraction (x, y, z) {
+    if (this.particleRestDensity === 0) return 0;
+    const xi = Math.max(1, Math.min(this.nX - 2, Math.floor(x * this.inv)));
+    const yi = Math.max(1, Math.min(this.nY - 2, Math.floor(y * this.inv)));
+    const zi = Math.max(1, Math.min(this.nZ - 2, Math.floor(z * this.inv)));
+    return Math.min(1, this.particleDensity[xi * this.sx + yi * this.sy + zi] / this.particleRestDensity);
+  }
+
+  addParticle (x, y, z, vx, vy, vz, cr, cg, cb) {
+    if (this.numParticles >= this.maxParticles) return false;
+    const i = this.numParticles++;
+    this.particlePos[3 * i] = x; this.particlePos[3 * i + 1] = y; this.particlePos[3 * i + 2] = z;
+    this.particleVel[3 * i] = vx; this.particleVel[3 * i + 1] = vy; this.particleVel[3 * i + 2] = vz;
+    this.particleColor[3 * i] = cr; this.particleColor[3 * i + 1] = cg; this.particleColor[3 * i + 2] = cb;
+    return true;
+  }
+
+  // remove particles inside a drain cylinder near the floor; returns removed count
+  drainAt (cx, cz, radius, maxY) {
+    const pos = this.particlePos, vel = this.particleVel, col = this.particleColor;
+    const r2 = radius * radius;
+    let removed = 0;
+    for (let i = 0; i < this.numParticles; i++) {
+      const dx = pos[3 * i] - cx, dz = pos[3 * i + 2] - cz;
+      if (pos[3 * i + 1] < maxY && dx * dx + dz * dz < r2) {
+        const last = --this.numParticles;
+        for (let ch = 0; ch < 3; ch++) {
+          pos[3 * i + ch] = pos[3 * last + ch];
+          vel[3 * i + ch] = vel[3 * last + ch];
+          col[3 * i + ch] = col[3 * last + ch];
+        }
+        removed++;
+        i--;   // re-examine the particle swapped into this slot
+      }
+    }
+    return removed;
+  }
+
+  setObstacle (obstacle) {
+    const sx = this.sx, sy = this.sy, h = this.h;
+    const r2 = obstacle.radius * obstacle.radius;
+    for (let i = 0; i < this.nX; i++) {
+      for (let j = 0; j < this.nY; j++) {
+        for (let k = 0; k < this.nZ; k++) {
+          const idx = i * sx + j * sy + k;
+          const border = i === 0 || i === this.nX - 1 || j === 0 || j === this.nY - 1 || k === 0 || k === this.nZ - 1;
+          this.s[idx] = border ? 0 : 1;
+          if (obstacle.active && !border) {
+            const dx = (i + 0.5) * h - obstacle.x;
+            const dy = (j + 0.5) * h - obstacle.y;
+            const dz = (k + 0.5) * h - obstacle.z;
+            if (dx * dx + dy * dy + dz * dz < r2) {
+              this.s[idx] = 0;
+              this.u[idx] = obstacle.vx; this.u[idx + sx] = obstacle.vx;
+              this.v[idx] = obstacle.vy; this.v[idx + sy] = obstacle.vy;
+              this.w[idx] = obstacle.vz; this.w[idx + 1] = obstacle.vz;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  simulate (dt, gx, gy, gz, flipRatio, obstacle, balls) {
+    this.integrateParticles(dt, gx, gy, gz);
+    this.pushParticlesApart(2);
+    this.handleParticleCollisions(obstacle, balls);
+    this.setObstacle(obstacle);
+    this.transferVelocities(true, flipRatio);
+    this.updateParticleDensity();
+    this.solveIncompressibility(30, 1.9);
+    this.transferVelocities(false, flipRatio);
+    this.updateParticleColors();
+  }
+}
+
+// ---------- scene ----------
+const params = {
+  gravity: 9.8, flipRatio: 0.85, waterAmount: 0.45, timeScale: 1.0,
+  tiltX: 0, tiltZ: 0,
+  paused: false, stir: false, pour: false, drain: false,
+};
+const obstacle = { active: false, x: 0.5, y: 0.5, z: 0.5, vx: 0, vy: 0, vz: 0, radius: 0.13, dye: null };
+const BOX = 1.0;   // cubic tank, side length in sim units
+let fluid = null;
+
+function HSVtoRGB (h, s, v) {
+  const i = Math.floor(h * 6), f = h * 6 - i;
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  switch (i % 6) {
+    case 0: return [v, t, p];
+    case 1: return [q, v, p];
+    case 2: return [p, v, t];
+    case 3: return [p, q, v];
+    case 4: return [t, p, v];
+    default: return [v, p, q];
+  }
+}
+
+// ---------- floating balls ----------
+const BALL_COLORS = [
+  [1.00, 0.45, 0.42], [1.00, 0.76, 0.32], [0.42, 0.90, 0.66],
+  [0.72, 0.62, 1.00], [0.95, 0.95, 0.98],
+];
+const MAX_BALLS = 5;
+const balls = [];
+let nextBallColor = 0;
+
+function spawnBall () {
+  const ball = {
+    x: 0.35 + Math.random() * 0.3,
+    y: BOX - 0.18,
+    z: 0.35 + Math.random() * 0.3,
+    vx: 0, vy: 0, vz: 0,
+    r: 0.065,
+    color: BALL_COLORS[nextBallColor++ % BALL_COLORS.length],
+  };
+  if (balls.length >= MAX_BALLS) balls.shift();
+  balls.push(ball);
+}
+
+function updateBalls (dt, gx, gy, gz) {
+  const RHO = 2.4;   // water density / ball density — balls float
+  for (const b of balls) {
+    const f = fluid.submergedFraction(b.x, b.y, b.z);
+    const lift = 1 - f * RHO;
+    const [fu, fv, fw] = fluid.sampleVelocity(b.x, b.y, b.z);
+    const drag = 6 * f;
+    b.vx += (gx * lift + (fu - b.vx) * drag) * dt;
+    b.vy += (gy * lift + (fv - b.vy) * drag) * dt;
+    b.vz += (gz * lift + (fw - b.vz) * drag) * dt;
+    b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+
+    const lo = fluid.h + b.r, hi = BOX - fluid.h - b.r;
+    if (b.x < lo) { b.x = lo; b.vx = -b.vx * 0.4; }
+    if (b.x > hi) { b.x = hi; b.vx = -b.vx * 0.4; }
+    if (b.y < lo) { b.y = lo; b.vy = -b.vy * 0.4; }
+    if (b.y > hi) { b.y = hi; b.vy = -b.vy * 0.4; }
+    if (b.z < lo) { b.z = lo; b.vz = -b.vz * 0.4; }
+    if (b.z > hi) { b.z = hi; b.vz = -b.vz * 0.4; }
+  }
+  // simple ball-ball separation
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i], c = balls[j];
+      const md = a.r + c.r;
+      const dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < md * md && d2 > 0) {
+        const d = Math.sqrt(d2);
+        const push = 0.5 * (md - d) / d;
+        a.x -= dx * push; a.y -= dy * push; a.z -= dz * push;
+        c.x += dx * push; c.y += dy * push; c.z += dz * push;
+      }
+    }
+  }
+}
+
+function shake () {
+  const vel = fluid.particleVel;
+  for (let i = 0; i < fluid.numParticles; i++) {
+    vel[3 * i] += (Math.random() - 0.5) * 4;
+    vel[3 * i + 1] += Math.random() * 3;
+    vel[3 * i + 2] += (Math.random() - 0.5) * 4;
+  }
+  for (const b of balls) {
+    b.vx += (Math.random() - 0.5) * 2;
+    b.vy += Math.random() * 1.5;
+    b.vz += (Math.random() - 0.5) * 2;
+  }
+}
+
+function setupScene () {
+  const res = 30;
+  const spacing = BOX / res;
+  const r = 0.35 * spacing;
+  const dx = 2.0 * r;
+
+  // dam-break column along one wall, full depth
+  const relW = 0.38;
+  const x0 = spacing + r, y0 = spacing + r, z0 = spacing + r;
+  const numX = Math.floor((relW * BOX - 2 * spacing) / dx);
+  const numY = Math.floor((Math.min(0.9, params.waterAmount * 2.0) * BOX - 2 * spacing) / dx);
+  const numZ = Math.floor((BOX - 2 * spacing - 2 * r) / dx);
+  const initial = numX * numY * numZ;
+  const capacity = Math.floor(initial * 1.8);   // headroom for the pour emitter
+
+  fluid = new FlipFluid3(BOX, BOX, BOX, spacing, r, capacity);
+  fluid.numParticles = initial;
+  balls.length = 0;
+  params.tiltX = 0; params.tiltZ = 0;
+  let p = 0;
+  for (let i = 0; i < numX; i++) {
+    for (let j = 0; j < numY; j++) {
+      for (let k = 0; k < numZ; k++) {
+        fluid.particlePos[p++] = x0 + dx * i + (Math.random() - 0.5) * 0.2 * r;
+        fluid.particlePos[p++] = y0 + dx * j + (Math.random() - 0.5) * 0.2 * r;
+        fluid.particlePos[p++] = z0 + dx * k + (Math.random() - 0.5) * 0.2 * r;
+      }
+    }
+  }
+  for (let i = 0; i < initial; i++) {
+    fluid.particleColor[3 * i] = BASE[0];
+    fluid.particleColor[3 * i + 1] = BASE[1];
+    fluid.particleColor[3 * i + 2] = BASE[2];
+  }
+}
+
+// ---------- camera ----------
+const cam = { theta: 0.7, phi: 0.32, dist: 2.4 };
+const CENTER = [0.5, 0.5, 0.5];
+const FOV_TAN = Math.tan((40 * Math.PI / 180) / 2);
+
+function cross (a, b) {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+function normalize (v) {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+function cameraBasis () {
+  const cp = Math.cos(cam.phi), sp = Math.sin(cam.phi);
+  const ct = Math.cos(cam.theta), st = Math.sin(cam.theta);
+  const eye = [
+    CENTER[0] + cam.dist * cp * st,
+    CENTER[1] + cam.dist * sp,
+    CENTER[2] + cam.dist * cp * ct,
+  ];
+  const fwd = normalize([CENTER[0] - eye[0], CENTER[1] - eye[1], CENTER[2] - eye[2]]);
+  const right = normalize(cross(fwd, [0, 1, 0]));
+  const up = cross(right, fwd);
+  return { eye, fwd, right, up };
+}
+
+// ---------- rendering ----------
+function compile (type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program (vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+const PROJ = `
+uniform vec3 uEye;
+uniform vec3 uRight;
+uniform vec3 uUp;
+uniform vec3 uFwd;
+uniform float uTanA;
+uniform float uAspect;
+vec4 project (vec3 p) {
+  vec3 rel = p - uEye;
+  vec3 vp = vec3(dot(rel, uRight), dot(rel, uUp), dot(rel, uFwd));
+  float n = 0.05, f = 20.0;
+  return vec4(vp.x / (uTanA * uAspect), vp.y / uTanA, ((f + n) * vp.z - 2.0 * f * n) / (f - n), vp.z);
+}`;
+
+const pointProg = program(`
+attribute vec3 aPos;
+attribute vec3 aColor;
+uniform float uPointScale;
+varying vec3 vColor;
+${PROJ}
+void main () {
+  vColor = aColor;
+  vec4 cp = project(aPos);
+  gl_Position = cp;
+  gl_PointSize = uPointScale / max(cp.w, 0.05);
+}`, `
+precision mediump float;
+varying vec3 vColor;
+void main () {
+  vec2 d = gl_PointCoord * 2.0 - 1.0;
+  d.y = -d.y;
+  float r2 = dot(d, d);
+  if (r2 > 1.0) discard;
+  vec3 nrm = vec3(d.x, d.y, sqrt(1.0 - r2));
+  float diff = 0.45 + 0.55 * max(dot(nrm, normalize(vec3(0.4, 0.7, 0.6))), 0.0);
+  gl_FragColor = vec4(vColor * diff, 1.0);
+}`);
+
+const lineProg = program(`
+attribute vec3 aPos;
+${PROJ}
+void main () { gl_Position = project(aPos); }`, `
+precision mediump float;
+uniform vec4 uColor;
+void main () { gl_FragColor = uColor; }`);
+
+// sphere paddle drawn as one big shaded point
+const discProg = program(`
+attribute vec3 aPos;
+uniform float uPointScale;
+${PROJ}
+void main () {
+  vec4 cp = project(aPos);
+  gl_Position = cp;
+  gl_PointSize = uPointScale / max(cp.w, 0.05);
+}`, `
+precision mediump float;
+uniform vec3 uColor;
+void main () {
+  vec2 d = gl_PointCoord * 2.0 - 1.0;
+  d.y = -d.y;
+  float r2 = dot(d, d);
+  if (r2 > 1.0) discard;
+  vec3 nrm = vec3(d.x, d.y, sqrt(1.0 - r2));
+  float diff = 0.4 + 0.6 * max(dot(nrm, normalize(vec3(0.4, 0.7, 0.6))), 0.0);
+  gl_FragColor = vec4(uColor * diff, 1.0);
+}`);
+
+const posBuf = gl.createBuffer();
+const colBuf = gl.createBuffer();
+const lineBuf = gl.createBuffer();
+const obsBuf = gl.createBuffer();
+
+function buildBoxEdges () {
+  const lo = fluid.h, hx = (fluid.nX - 1) * fluid.h, hy = (fluid.nY - 1) * fluid.h, hz = (fluid.nZ - 1) * fluid.h;
+  const c = [
+    [lo, lo, lo], [hx, lo, lo], [hx, lo, hz], [lo, lo, hz],
+    [lo, hy, lo], [hx, hy, lo], [hx, hy, hz], [lo, hy, hz],
+  ];
+  const e = [0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7];
+  const verts = new Float32Array(e.length * 3);
+  for (let i = 0; i < e.length; i++) {
+    verts[3 * i] = c[e[i]][0]; verts[3 * i + 1] = c[e[i]][1]; verts[3 * i + 2] = c[e[i]][2];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  return e.length;
+}
+let boxEdgeCount = 0;
+
+function setProjUniforms (prog) {
+  const { eye, fwd, right, up } = cameraBasis();
+  gl.uniform3f(gl.getUniformLocation(prog, 'uEye'), eye[0], eye[1], eye[2]);
+  gl.uniform3f(gl.getUniformLocation(prog, 'uRight'), right[0], right[1], right[2]);
+  gl.uniform3f(gl.getUniformLocation(prog, 'uUp'), up[0], up[1], up[2]);
+  gl.uniform3f(gl.getUniformLocation(prog, 'uFwd'), fwd[0], fwd[1], fwd[2]);
+  gl.uniform1f(gl.getUniformLocation(prog, 'uTanA'), FOV_TAN);
+  gl.uniform1f(gl.getUniformLocation(prog, 'uAspect'), canvas.width / canvas.height);
+}
+
+function render () {
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0.020, 0.027, 0.047, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+
+  // tank edges
+  gl.useProgram(lineProg);
+  setProjUniforms(lineProg);
+  gl.uniform4f(gl.getUniformLocation(lineProg, 'uColor'), 0.72, 0.78, 0.85, 0.22);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
+  const aLine = gl.getAttribLocation(lineProg, 'aPos');
+  gl.enableVertexAttribArray(aLine);
+  gl.vertexAttribPointer(aLine, 3, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.LINES, 0, boxEdgeCount);
+  gl.disableVertexAttribArray(aLine);
+  gl.disable(gl.BLEND);
+
+  // water particles as shaded sphere impostors
+  gl.useProgram(pointProg);
+  setProjUniforms(pointProg);
+  const pointScale = 2.4 * fluid.particleRadius * (canvas.height * 0.5) / FOV_TAN;
+  gl.uniform1f(gl.getUniformLocation(pointProg, 'uPointScale'), pointScale);
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, fluid.particlePos.subarray(0, 3 * fluid.numParticles), gl.DYNAMIC_DRAW);
+  const aPos = gl.getAttribLocation(pointProg, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, fluid.particleColor.subarray(0, 3 * fluid.numParticles), gl.DYNAMIC_DRAW);
+  const aCol = gl.getAttribLocation(pointProg, 'aColor');
+  gl.enableVertexAttribArray(aCol);
+  gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.POINTS, 0, fluid.numParticles);
+  gl.disableVertexAttribArray(aCol);
+  gl.disableVertexAttribArray(aPos);
+
+  // spheres: paddle, floating balls, drain marker
+  const spheres = [];
+  if (obstacle.active) {
+    spheres.push({ x: obstacle.x, y: obstacle.y, z: obstacle.z, r: obstacle.radius,
+                   color: obstacle.dye || [0.20, 0.24, 0.31] });
+  }
+  for (const b of balls) spheres.push(b);
+  if (params.drain) {
+    spheres.push({ x: 0.5, y: fluid.h, z: 0.5, r: 0.1, color: [0.03, 0.04, 0.06] });
+  }
+  if (spheres.length > 0) {
+    gl.useProgram(discProg);
+    setProjUniforms(discProg);
+    const aObs = gl.getAttribLocation(discProg, 'aPos');
+    const uScale = gl.getUniformLocation(discProg, 'uPointScale');
+    const uColor = gl.getUniformLocation(discProg, 'uColor');
+    gl.bindBuffer(gl.ARRAY_BUFFER, obsBuf);
+    gl.enableVertexAttribArray(aObs);
+    for (const s of spheres) {
+      gl.uniform1f(uScale, 2.0 * s.r * (canvas.height * 0.5) / FOV_TAN);
+      gl.uniform3f(uColor, s.color[0], s.color[1], s.color[2]);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([s.x, s.y, s.z]), gl.DYNAMIC_DRAW);
+      gl.vertexAttribPointer(aObs, 3, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.POINTS, 0, 1);
+    }
+    gl.disableVertexAttribArray(aObs);
+  }
+  gl.disable(gl.DEPTH_TEST);
+}
+
+// ---------- canvas / resize ----------
+function resizeCanvas () {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const w = Math.floor(canvas.clientWidth * dpr);
+  const h = Math.floor(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ---------- input ----------
+const hint = document.getElementById('hint');
+let interacted = false;
+let lastInteraction = performance.now();
+const pointers = new Map();
+let pinchDist = 0;
+let lastStir = null;
+let stirHue = Math.random();
+
+function markInteracted () {
+  lastInteraction = performance.now();
+  if (!interacted) { interacted = true; hint.classList.add('gone'); }
+}
+function clampDist (d) { return Math.min(6.0, Math.max(1.3, d)); }
+
+// pointer ray intersected with the plane through the tank center facing the camera
+function screenToSim (clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  let nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+  const ny = (1 - (clientY - rect.top) / rect.height) * 2 - 1;
+  nx *= rect.width / rect.height;
+  const { eye, fwd, right, up } = cameraBasis();
+  const dir = normalize([
+    fwd[0] + FOV_TAN * (nx * right[0] + ny * up[0]),
+    fwd[1] + FOV_TAN * (nx * right[1] + ny * up[1]),
+    fwd[2] + FOV_TAN * (nx * right[2] + ny * up[2]),
+  ]);
+  const rel = [CENTER[0] - eye[0], CENTER[1] - eye[1], CENTER[2] - eye[2]];
+  const t = (rel[0] * fwd[0] + rel[1] * fwd[1] + rel[2] * fwd[2])
+          / (dir[0] * fwd[0] + dir[1] * fwd[1] + dir[2] * fwd[2]);
+  const m = 2 * fluid.h;
+  return [
+    Math.min(BOX - m, Math.max(m, eye[0] + dir[0] * t)),
+    Math.min(BOX - m, Math.max(m, eye[1] + dir[1] * t)),
+    Math.min(BOX - m, Math.max(m, eye[2] + dir[2] * t)),
+  ];
+}
+
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+  } else if (params.stir) {
+    const [x, y, z] = screenToSim(e.clientX, e.clientY);
+    obstacle.active = true;
+    obstacle.x = x; obstacle.y = y; obstacle.z = z;
+    obstacle.vx = obstacle.vy = obstacle.vz = 0;
+    stirHue = (stirHue + 0.17) % 1;
+    obstacle.dye = HSVtoRGB(stirHue, 0.8, 1.0);
+    lastStir = { x, y, z, t: performance.now() };
+  }
+  markInteracted();
+});
+canvas.addEventListener('pointermove', e => {
+  const prev = pointers.get(e.pointerId);
+  if (!prev) return;
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchDist > 0) cam.dist = clampDist(cam.dist * (pinchDist / d));
+    pinchDist = d;
+  } else if (params.stir && obstacle.active) {
+    const [x, y, z] = screenToSim(e.clientX, e.clientY);
+    const now = performance.now();
+    const dt = Math.max((now - lastStir.t) / 1000, 1e-3);
+    obstacle.vx = (x - lastStir.x) / dt;
+    obstacle.vy = (y - lastStir.y) / dt;
+    obstacle.vz = (z - lastStir.z) / dt;
+    obstacle.x = x; obstacle.y = y; obstacle.z = z;
+    lastStir = { x, y, z, t: now };
+  } else {
+    cam.theta -= dx * 0.008;
+    cam.phi = Math.min(1.35, Math.max(-1.2, cam.phi + dy * 0.008));
+  }
+  markInteracted();
+});
+const endPointer = e => {
+  pointers.delete(e.pointerId);
+  pinchDist = 0;
+  obstacle.active = false;
+  obstacle.vx = obstacle.vy = obstacle.vz = 0;
+};
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  cam.dist = clampDist(cam.dist * Math.exp(e.deltaY * 0.001));
+  markInteracted();
+}, { passive: false });
+
+// ---------- controls ----------
+const $ = id => document.getElementById(id);
+$('grav').addEventListener('input', e => {
+  params.gravity = +e.target.value;
+  $('gravV').textContent = (+e.target.value).toFixed(1);
+});
+$('flip').addEventListener('input', e => {
+  params.flipRatio = +e.target.value;
+  $('flipV').textContent = (+e.target.value).toFixed(2);
+});
+$('amount').addEventListener('input', e => {
+  params.waterAmount = +e.target.value;
+  $('amountV').textContent = (+e.target.value).toFixed(2);
+  setupScene();
+  boxEdgeCount = buildBoxEdges();
+});
+$('speed').addEventListener('input', e => {
+  params.timeScale = +e.target.value;
+  $('speedV').textContent = (+e.target.value).toFixed(1);
+});
+$('stir').addEventListener('click', e => {
+  params.stir = !params.stir;
+  e.target.setAttribute('aria-pressed', String(params.stir));
+  canvas.classList.toggle('stir', params.stir);
+});
+$('pour').addEventListener('click', e => {
+  params.pour = !params.pour;
+  e.target.setAttribute('aria-pressed', String(params.pour));
+});
+$('drain').addEventListener('click', e => {
+  params.drain = !params.drain;
+  e.target.setAttribute('aria-pressed', String(params.drain));
+});
+$('ball').addEventListener('click', spawnBall);
+$('shake').addEventListener('click', shake);
+
+// arrow keys tilt the tank's gravity; R levels it again
+window.addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const STEP = 0.1, MAX = 0.5;
+  if (e.key === 'ArrowLeft') params.tiltX = Math.max(-MAX, params.tiltX - STEP);
+  else if (e.key === 'ArrowRight') params.tiltX = Math.min(MAX, params.tiltX + STEP);
+  else if (e.key === 'ArrowUp') params.tiltZ = Math.max(-MAX, params.tiltZ - STEP);
+  else if (e.key === 'ArrowDown') params.tiltZ = Math.min(MAX, params.tiltZ + STEP);
+  else if (e.key === 'r' || e.key === 'R') { params.tiltX = 0; params.tiltZ = 0; }
+  else return;
+  e.preventDefault();
+  markInteracted();
+});
+$('reset').addEventListener('click', () => {
+  setupScene();
+  boxEdgeCount = buildBoxEdges();
+});
+$('pause').addEventListener('click', e => {
+  params.paused = !params.paused;
+  e.target.textContent = params.paused ? '再開' : '一時停止';
+  e.target.setAttribute('aria-pressed', String(params.paused));
+});
+
+// ---------- main loop ----------
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+setupScene();
+boxEdgeCount = buildBoxEdges();
+
+let pourHue = Math.random();
+
+function frame (now) {
+  resizeCanvas();
+  if (!params.paused) {
+    const dt = params.timeScale / 60;
+    const g = params.gravity;
+    const tilt = Math.hypot(params.tiltX, params.tiltZ);
+    const gx = g * Math.sin(params.tiltX);
+    const gz = g * Math.sin(params.tiltZ);
+    const gy = -g * Math.cos(Math.min(tilt, 1.2));
+
+    if (params.pour) {
+      pourHue = (pourHue + 0.0012) % 1;
+      const c = HSVtoRGB(pourHue, 0.7, 1.0);
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * Math.PI * 2, rr = Math.random() * 0.045;
+        if (!fluid.addParticle(
+          0.5 + Math.cos(a) * rr, BOX - 2.5 * fluid.h, 0.5 + Math.sin(a) * rr,
+          0, -1.6, 0, c[0], c[1], c[2])) break;
+      }
+    }
+    if (params.drain) fluid.drainAt(0.5, 0.5, 0.11, 0.18);
+
+    updateBalls(dt, gx, gy, gz);
+    fluid.simulate(dt, gx, gy, gz, params.flipRatio, obstacle, balls);
+  }
+  if (!reducedMotion && pointers.size === 0 && now - lastInteraction > 4000) {
+    cam.theta += 0.06 / 60;
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
