@@ -6,6 +6,8 @@
 - GitHub Pages: https://kosei-matsuzaki.github.io/fluid-lab/
 - Artifact: https://claude.ai/code/artifact/d3e7d264-c467-42cd-9a98-2e2d9c2df422
 
+> 作品概要・スクリーンショット・設計の意図は [docs/PORTFOLIO.md](docs/PORTFOLIO.md) を参照してください。
+
 ## 実行方法
 
 `fluid-lab.html` をブラウザで開くだけ。WebGL2 + `EXT_color_buffer_float` があるとフル品質(GPU海洋シミュレーション・高解像度地形)、ない環境ではCPUフォールバックで動作する。
